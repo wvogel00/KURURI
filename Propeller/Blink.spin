@@ -1,5 +1,9 @@
+CON
+  Led = 16
+  Delay = 3_000_000
+
 PUB Blink
-  dira[16]~~
+  dira[Led]~~
   repeat
-    !outa[16]
-    waitcnt(3_000_000 + cnt)
+    !outa[Led]
+    waitcnt(Delay + cnt)
