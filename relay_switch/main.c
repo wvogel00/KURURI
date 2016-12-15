@@ -13,7 +13,14 @@
 #define DeltaT 3.5  //3.5msが、ロータリーエンコーダのパルス間隔
 #define LED1 PORTAbits.RA0
 #define LED2 PORTAbits.RA2
-#define RELAY PORTAbits.RA1
+#define RELAY1 PORTAbits.RA1
+#define RELAY2 PORTAbits.RA4
+#define RELAY3 PORTCbits.RC5
+#define RELAY4 PORTCbits.RC4
+#define RELAY5 PORTCbits.RC3
+#define IPHONE_MIC  PORTAbits.RA5
+#define TO_IPHONE 0
+#define TO_SPEAKER 1
 // コンフィギュレーション１の設定
 #pragma config FOSC     = INTOSC   // 内部ｸﾛｯｸ使用する(INTOSC)
 #pragma config WDTE     = OFF      // ｳｵｯﾁﾄﾞｯｸﾞﾀｲﾏｰ無し(OFF)
@@ -35,6 +42,7 @@
 #pragma config LVP      = OFF      // 低電圧プログラミング機能使用しない(OFF)
 
 char cw;    //時計回り判定フラグ 1=CW, 0=CCW
+char signalTo = TO_SPEAKER;
 
 void BLINKS(int t)
 {
@@ -68,34 +76,60 @@ void interrupt isr()
 {
     char counter0 = 0,counter1 = 0;
     GIE = 0;
+    
+    //iphone-speaker スイッチ割り込み
+    if(INTCONbits.IOCIF && IOCCFbits.IOCCF1)
+    {
+        //フラグクリア
+        IOCCFbits.IOCCF1 = 0;
+        INTCONbits.IOCIF == 0;
+        signalTo = signalTo == TO_SPEAKER ? TO_IPHONE : TO_SPEAKER;
+    }
+    
     if(INTCONbits.IOCIF && IOCCFbits.IOCCF0)   //RC0が立ち上がり
     {
         //フラグクリア
         IOCCFbits.IOCCF0 = 0;
+        IOCCFbits.IOCCF1 = 0;
         INTCONbits.IOCIF == 0;
         
-        //チャタリング処理
+        //チャタリング対策
         for(int i = 0; i < 5; i++)
         {
             counter0 += PORTCbits.RC0;
             counter1 += PORTCbits.RC1;
             __delay_us(200);
         }
-        if(3 <= counter0 && counter1 < 3)
+        if(3 <= counter0 && counter1 <= 3)
         {
-            LED2 = LOW;
-            __delay_us(300);
-            LED1 = HIGH;
+            for(int i = 0; i < 10; i++)
+            {
+                IPHONE_MIC = HIGH;
+                __delay_us(20);
+                IPHONE_MIC = LOW;
+                __delay_us(20);
+                LED2 = LOW;
+                __delay_us(20);
+                LED1 = HIGH;
+            }
         }
         else if (3 <= counter0 && 3 <= counter1)
         {
-            LED1 = LOW;
-            __delay_us(300);
-            LED2 = HIGH;
+            for(int i = 0; i < 2; i++)
+            {
+                IPHONE_MIC = HIGH;
+                __delay_us(120);
+                IPHONE_MIC = LOW;
+                __delay_us(80);
+                LED1 = LOW;
+                __delay_us(20);
+                LED2 = HIGH;
+            }
         }
     }
     GIE = 1;
 }
+
 
 
 void initialize()
@@ -124,6 +158,20 @@ void initialize()
     PEIE = 1;       //IO edge検出割り込み初期化
 }
 
+void SwitchRelay(int id)
+{
+    __delay_ms(1000);
+    const int overlap = 500;
+    switch(id)
+    {
+        case 0 : RELAY1 = HIGH; __delay_ms(200); RELAY5 = LOW; break;
+        case 1 : RELAY2 = HIGH; __delay_ms(200); RELAY1 = LOW; break;
+        case 2 : RELAY3 = HIGH; __delay_ms(200); RELAY2 = LOW; break;
+        case 3 : RELAY4 = HIGH; __delay_ms(200); RELAY3 = LOW; break;
+        case 4 : RELAY5 = HIGH; __delay_ms(200); RELAY4 = LOW; break;
+    }
+}
+
 void main(void) {
     initialize();
     int mode = 1;
@@ -134,10 +182,10 @@ void main(void) {
     else
         while(1)
         {
-            __delay_ms(3000);
-            RELAY = HIGH;
-            __delay_ms(3000);
-            RELAY = LOW;
+            for(int i = 0; i < 5; i++)
+            {
+                SwitchRelay(i);
+            }
         }
     
     return;
